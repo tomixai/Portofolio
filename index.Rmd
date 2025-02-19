@@ -5,6 +5,8 @@ date: "`r Sys.Date()`"
 output: 
   flexdashboard::flex_dashboard:
     storyboard: true
+    orientation: columns
+    
 ---
 
 ```{r setup, include=FALSE} 
