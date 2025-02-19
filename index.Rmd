@@ -1,0 +1,90 @@
+---
+title: "Portofolio for Computational Musicology 2025"
+author: "Thomas Manu"
+date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+---
+
+```{r setup, include=FALSE} 
+library(flexdashboard)
+library(plotly)
+```
+
+Introduction{.storyboard}
+==================
+
+ {data-width=400}
+-----------------------------------------------------------------------
+
+### Description of the corpus
+
+```{r}
+
+```
+
+Welcome to my **Portofolio** for the Computational Musicology course! 
+
+ {data-width=600}
+-----------------------------------------------------------------------
+
+### Other relevant information 
+
+```{r}
+
+```
+
+Visualisation 
+=================
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+
+```
+
+### Chart C
+
+```{r}
+
+```
+
+Conclusion 
+=================
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+
+```
+
+### Chart C
+
+```{r}
+
+```
