@@ -10,9 +10,13 @@ output:
 ---
 
 ```{r setup, include=FALSE} 
-library(tidyverse)
-library(flexdashboard)
-library(plotly)
+library(jsonlite)
+library(tuneR)
+library(seewave)
+library(ggplot2)
+library(reshape2)
+library(proxy)
+library(plotly) 
 ```
 
 Introduction{.storyboard}
@@ -21,18 +25,99 @@ Introduction{.storyboard}
  {data-width=400}
 -----------------------------------------------------------------------
 
-### Description of the corpus
+### Homework 9
 
 ```{r}
+json_file1 <- "/Users/thomas/Desktop/json tracks/thomas-m-1.json"  # Replace with actual file path
+json_file2 <- "/Users/thomas/Desktop/json tracks/thomas-m-2.json"  # Replace with actual file path
+
+track1 <- fromJSON(json_file1)
+track2 <- fromJSON(json_file2)
+
+# Extract spectral centroid, spectral flux, MFCC, and dynamic complexity safely
+extract_features <- function(json_data) {
+  print(names(json_data$lowlevel))  # Debugging: check available keys
+  
+  required_keys <- c("spectral_centroid", "spectral_flux")
+  
+  for (key in required_keys) {
+    if (!(key %in% names(json_data$lowlevel))) {
+      stop(paste("Feature", key, "not found in JSON structure. Available keys:", 
+                 paste(names(json_data$lowlevel), collapse=", ")))
+    }
+  }
+  
+  spectral_centroid <- unlist(json_data$lowlevel$spectral_centroid)
+  spectral_flux <- unlist(json_data$lowlevel$spectral_flux)
+  dynamic_complexity <- unlist(json_data$lowlevel$dynamic_complexity)
+  mfcc <- matrix(unlist(json_data$lowlevel$mfcc), nrow = 12, byrow = TRUE)  # Assuming 12 MFCCs
+  
+  return(list(spectral_centroid = spectral_centroid,
+              spectral_flux = spectral_flux,
+              dynamic_complexity = dynamic_complexity,
+              mfcc = mfcc))
+}
+
+features1 <- extract_features(track1)
+features2 <- extract_features(track2)
+
+# --- Step 1: Interactive Feature Visualizations ---
+plot_feature <- function(feature, title, y_label) {
+  feature_df <- data.frame(Time = 1:length(feature), Value = feature)
+  
+  p <- ggplot(feature_df, aes(x = Time, y = Value)) +
+    geom_line(color = "blue") +
+    theme_minimal() +
+    labs(title = title, x = "Time", y = y_label)
+  
+  ggplotly(p)  # Convert to interactive plot
+}
+
+plot_feature(features1$spectral_centroid, "Spectral Centroid for Track 1", "Centroid Value")
+plot_feature(features2$spectral_centroid, "Spectral Centroid for Track 2", "Centroid Value")
+
+plot_feature(features1$spectral_flux, "Spectral Flux for Track 1", "Flux Value")
+plot_feature(features2$spectral_flux, "Spectral Flux for Track 2", "Flux Value")
+
+plot_feature(features1$dynamic_complexity, "Dynamic Complexity for Track 1", "Complexity Value")
+plot_feature(features2$dynamic_complexity, "Dynamic Complexity for Track 2", "Complexity Value")
+
+# --- Step 2: Compute Self-Similarity Matrices (SSMs) using MFCC ---
+compute_ssm <- function(features) {
+  sim_matrix <- proxy::dist(t(features), method = "euclidean")
+  return(as.matrix(sim_matrix))
+}
+
+ssm_mfcc1 <- compute_ssm(features1$mfcc)
+ssm_mfcc2 <- compute_ssm(features2$mfcc)
+
+# --- Step 3: Interactive Self-Similarity Matrices ---
+plot_ssm <- function(ssm, title) {
+  ssm_df <- melt(ssm)
+  colnames(ssm_df) <- c("Time1", "Time2", "Similarity")
+  
+  p <- ggplot(ssm_df, aes(x = Time1, y = Time2, fill = Similarity)) +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    theme_minimal() +
+    labs(title = title, x = "Time Index", y = "Time Index")
+  
+  ggplotly(p)  # Convert to interactive plot
+}
+
+plot_ssm(ssm_mfcc1, "MFCC-Based Self-Similarity Matrix (Track 1)")
+plot_ssm(ssm_mfcc2, "MFCC-Based Self-Similarity Matrix (Track 2)")
+
 
 ```
 
-Welcome to my **Portofolio** for the Computational Musicology course! 
 
  {data-width=600}
 -----------------------------------------------------------------------
 
 ### Other relevant information 
+
+Welcome to my **Portofolio** for the Computational Musicology course! The two tracks I have created were made using **flstudio**, about 2 years ago when I was getting started with music production. 
 
 ```{r}
 
@@ -47,52 +132,8 @@ Column {data-width=650}
 ### Chart A
 
 ```{r}
-aisc2024 <- read_csv("aisc2024.csv")
 
-aisc2024 |>                   # Start with the data
-  ggplot(                     # Set up the plot.
-    aes(
-      x = tempo,
-      y = arousal,
-      size = instrumentalness,
-      colour = danceability
-    )
-  ) +
-  geom_point() +              # Scatter plot.
-  geom_rug(linewidth = 0.1) + # Add 'fringes' to show data distribution.
-  geom_text(                  # Add text labels from above.
-    x = 121,
-    y = 4.91,
-    label = "Onda Corta - Sud America",
-    size = 3,                 # Override size (not loudness here).
-    hjust = "left",           # Align left side of label with the point.
-    vjust = "center",         # Align vertical centre of label with the point.
-    angle = 30                # Rotate the text label
-  ) +
-  scale_x_continuous(         # Fine-tune the x axis.
-    limits = c(50, 200),
-    breaks = c(50, 100, 150, 200), # Specify grid lines
-    minor_breaks = NULL       # Remove 'minor' grid lines.
-  ) +
-  scale_y_continuous(         # Fine-tune the y axis in the same way.
-    limits = c(1, 9),
-    breaks = c(1, 5, 9),
-    minor_breaks = NULL
-  ) +
-  scale_colour_viridis_c() +  # Use the popular viridis colour palette.
-  scale_size_continuous(      # Fine-tune the sizes of each point.
-    trans = "exp",            # Use an exp transformation to emphasise loud..
-    guide = "none"            # Remove the legend for size.
-  ) +
-  theme_light() +             # Use a simpler theme.
-  labs(                       # Make the titles nice.
-    x = "Tempo",
-    y = "Arousal",
-    colour = "Danceability"
-  )
-ggplotly()
-```
-
+``` 
 Column {data-width=350}
 -----------------------------------------------------------------------
 
