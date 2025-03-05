@@ -22,7 +22,7 @@ library(purrr)
 
 ##  {data-width="400"}
 
-### Homework 9
+### Homework 9: Chromagram
 
 ```{r}
 
@@ -70,6 +70,31 @@ compmus_chroma <- function(file, norm = "identity") {
     mutate(time = 2048 * time / 44100)
 }
 
+# Example Execution: Load and Analyze a Track
+file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json" # Update with actual file path
+
+circshift <- function(vec, shift) {
+  n <- length(vec)
+  shift <- shift %% n  # Ensure the shift is within bounds
+  c(tail(vec, -shift), head(vec, shift))
+}
+
+chroma_data <- compmus_chroma(file_path, norm = "euclidean")
+
+# Plot chromagram
+ggplot(chroma_data, aes(x = time, y = pc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = "Chromagram", x = "Time (s)", y = "Pitch Class", fill = "Magnitude") +
+  theme_minimal()
+```
+
+##  {data-width="600"}
+
+### Homework9: SSM
+
+
+```{r}
 # Compute MFCCs (Timbre)
 compmus_mfccs <- function(file, norm = "identity") {
   json_data <- fromJSON(file = file)
@@ -85,13 +110,7 @@ compmus_mfccs <- function(file, norm = "identity") {
     mutate(time = 1024 * time / 44100)
 }
 
-# Compute self-similarity matrices for chroma and timbre
-compmus_self_similarity <- function(dat, feature, distance = "euclidean") {
-  feature <- enquo(feature)
-  compmus_long_distance(dat, dat, !!feature, distance)
-}
-
-# Function to compute pairwise distances
+# Compute pairwise distances
 compmus_long_distance <- function(xdat, ydat, feature, distance = "euclidean") {
   feature <- enquo(feature)
 
@@ -144,90 +163,28 @@ compmus_long_distance <- function(xdat, ydat, feature, distance = "euclidean") {
   }
 }
 
-# Chroma and Timbre Matching Example
-compmus_match_pitch_template <- function(dat, templates, method = "cosine", norm = "euclidean") {
-  compmus_long_distance(
-    dat %>%
-      mutate(pitches = map(pitches, compmus_normalise, norm)),
-    templates %>%
-      transmute(
-        start = name,
-        duration = 1,
-        pitches = map(template, compmus_normalise, norm)
-      ),
-    feature = pitches,
-    method = method
-  ) %>%
-    transmute(
-      start = xstart,
-      duration = xduration,
-      name = factor(ystart, levels = pluck(templates, "name")),
-      d
-    )
-}
-
-# Plot Self-Similarity Matrices
-plot_similarity_matrix <- function(similarity_data, title) {
-  ggplot(similarity_data, aes(x = xtime, y = ytime, fill = d)) +
-    geom_tile() +
-    scale_fill_gradient(low = "blue", high = "red") +
-    labs(title = title, x = "Time", y = "Time", fill = "Distance") +
-    theme_minimal()
-}
-
-# Example Execution: Load and Analyze a Track
-file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json" # Update with actual file path
-
-# Compute chroma and timbre
-circshift <- function(vec, shift) {
-  n <- length(vec)
-  shift <- shift %% n  # Ensure the shift is within bounds
-  c(tail(vec, -shift), head(vec, shift))
-}
-
-chroma_data <- compmus_chroma(file_path, norm = "euclidean")
-mfcc_data <- compmus_mfccs(file_path, norm = "euclidean")
-
 # Compute self-similarity matrices
-chroma_similarity <- compmus_self_similarity(chroma_data, feature = pc, distance = "cosine")
+compmus_self_similarity <- function(dat, feature, distance = "euclidean") {
+  feature <- enquo(feature)
+  compmus_long_distance(dat, dat, !!feature, distance)
+}
+
+mfcc_data <- compmus_mfccs(file_path, norm = "euclidean")
 mfcc_similarity <- compmus_self_similarity(mfcc_data, feature = mfcc, distance = "euclidean")
 
-# Plot similarity matrices
-plot_similarity_matrix(chroma_similarity, "Chroma Self-Similarity Matrix")
-plot_similarity_matrix(mfcc_similarity, "Timbre (MFCC) Self-Similarity Matrix")
-
-
-```
-
-##  {data-width="600"}
-
-### Other relevant information
-
-Welcome to my **Portofolio** for the Computational Musicology course! The two tracks I have created were made using **flstudio**, about 2 years ago when I was getting started with music production.
-
-```{r}
-
+# Plot similarity matrix
+ggplot(mfcc_similarity, aes(x = xtime, y = ytime, fill = d)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "yellow") +
+  labs(title = "Timbre Self-Similarity Matrix", x = "Time", y = "Time", fill = "Distance") +
+  theme_minimal()
 ```
 
 # Visualisation
 
 ## Column {data-width="650"}
 
-### Chart A
-
-```{r}
-
-```
-
-## Column {data-width="350"}
-
-### Chart B
-
-```{r}
-
-```
-
-### Chart C
+### Timbre Self-Similarity Matrix
 
 ```{r}
 
