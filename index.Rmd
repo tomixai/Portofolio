@@ -6,136 +6,220 @@ output:
   flexdashboard::flex_dashboard:
     storyboard: true
     orientation: columns
-    
 ---
 
-```{r setup, include=FALSE} 
-library(jsonlite)
+```{r setup, include=FALSE}
+library(rjson)
+library(tidyverse)
 library(tuneR)
 library(seewave)
 library(ggplot2)
-library(reshape2)
-library(proxy)
-library(plotly) 
+library(dplyr)
+library(purrr)
 ```
 
-Introduction{.storyboard}
-==================
+# Introduction {.storyboard}
 
- {data-width=400}
------------------------------------------------------------------------
+##  {data-width="400"}
 
 ### Homework 9
 
 ```{r}
-json_file1 <- "/Users/thomas/Desktop/json tracks/thomas-m-1.json"  # Replace with actual file path
-json_file2 <- "/Users/thomas/Desktop/json tracks/thomas-m-2.json"  # Replace with actual file path
 
-track1 <- fromJSON(json_file1)
-track2 <- fromJSON(json_file2)
+# Normalize vectors using various normalization strategies
+compmus_normalise <- function(v, method = "euclidean") {
+  harmonic <- function(v) v * sum(1 / abs(v))
+  manhattan <- function(v) v / sum(abs(v))
+  euclidean <- function(v) v / sqrt(sum(v^2))
+  chebyshev <- function(v) v / max(abs(v))
+  clr <- function(v) { lv <- log(v); lv - mean(lv) }
+  softmax <- function(v) exp(v) / sum(exp(v))
 
-# Extract spectral centroid, spectral flux, MFCC, and dynamic complexity safely
-extract_features <- function(json_data) {
-  print(names(json_data$lowlevel))  # Debugging: check available keys
-  
-  required_keys <- c("spectral_centroid", "spectral_flux")
-  
-  for (key in required_keys) {
-    if (!(key %in% names(json_data$lowlevel))) {
-      stop(paste("Feature", key, "not found in JSON structure. Available keys:", 
-                 paste(names(json_data$lowlevel), collapse=", ")))
-    }
+  METHODS <- list(
+    identity = identity,
+    harmonic = harmonic,
+    manhattan = manhattan, L1 = manhattan,
+    euclidean = euclidean, L2 = euclidean,
+    chebyshev = chebyshev, maximum = chebyshev,
+    aitchison = clr, clr = clr,
+    softmax = softmax
+  )
+
+  if (!is.na(i <- pmatch(method, names(METHODS)))) {
+    METHODS[[i]](v)
+  } else {
+    stop("The method name is ambiguous or unsupported.")
   }
-  
-  spectral_centroid <- unlist(json_data$lowlevel$spectral_centroid)
-  spectral_flux <- unlist(json_data$lowlevel$spectral_flux)
-  dynamic_complexity <- unlist(json_data$lowlevel$dynamic_complexity)
-  mfcc <- matrix(unlist(json_data$lowlevel$mfcc), nrow = 12, byrow = TRUE)  # Assuming 12 MFCCs
-  
-  return(list(spectral_centroid = spectral_centroid,
-              spectral_flux = spectral_flux,
-              dynamic_complexity = dynamic_complexity,
-              mfcc = mfcc))
 }
 
-features1 <- extract_features(track1)
-features2 <- extract_features(track2)
-
-# --- Step 1: Interactive Feature Visualizations ---
-plot_feature <- function(feature, title, y_label) {
-  feature_df <- data.frame(Time = 1:length(feature), Value = feature)
+# Compute chroma features
+compmus_chroma <- function(file, norm = "identity") {
+  json_data <- fromJSON(file = file)
   
-  p <- ggplot(feature_df, aes(x = Time, y = Value)) +
-    geom_line(color = "blue") +
-    theme_minimal() +
-    labs(title = title, x = "Time", y = y_label)
-  
-  ggplotly(p)  # Convert to interactive plot
+  json_data$tonal$hpcp %>%
+    map(~ {
+      .x %>%
+        circshift(-8) %>%
+        matrix(3, 12) %>%
+        colMeans() %>%
+        compmus_normalise(method = norm) %>%
+        enframe(name = "pc") %>%
+        mutate(pc = pc - 1)
+    }) %>%
+    list_rbind(names_to = "time") %>%
+    mutate(time = 2048 * time / 44100)
 }
 
-plot_feature(features1$spectral_centroid, "Spectral Centroid for Track 1", "Centroid Value")
-plot_feature(features2$spectral_centroid, "Spectral Centroid for Track 2", "Centroid Value")
+# Compute MFCCs (Timbre)
+compmus_mfccs <- function(file, norm = "identity") {
+  json_data <- fromJSON(file = file)
 
-plot_feature(features1$spectral_flux, "Spectral Flux for Track 1", "Flux Value")
-plot_feature(features2$spectral_flux, "Spectral Flux for Track 2", "Flux Value")
-
-plot_feature(features1$dynamic_complexity, "Dynamic Complexity for Track 1", "Complexity Value")
-plot_feature(features2$dynamic_complexity, "Dynamic Complexity for Track 2", "Complexity Value")
-
-# --- Step 2: Compute Self-Similarity Matrices (SSMs) using MFCC ---
-compute_ssm <- function(features) {
-  sim_matrix <- proxy::dist(t(features), method = "euclidean")
-  return(as.matrix(sim_matrix))
+  json_data$lowlevel$mfcc %>%
+    map(~ {
+      .x %>%
+        compmus_normalise(method = norm) %>%
+        enframe(name = "mfcc") %>%
+        mutate(mfcc = mfcc - 1)
+    }) %>%
+    list_rbind(names_to = "time") %>%
+    mutate(time = 1024 * time / 44100)
 }
 
-ssm_mfcc1 <- compute_ssm(features1$mfcc)
-ssm_mfcc2 <- compute_ssm(features2$mfcc)
+# Compute self-similarity matrices for chroma and timbre
+compmus_self_similarity <- function(dat, feature, distance = "euclidean") {
+  feature <- enquo(feature)
+  compmus_long_distance(dat, dat, !!feature, distance)
+}
 
-# --- Step 3: Interactive Self-Similarity Matrices ---
-plot_ssm <- function(ssm, title) {
-  ssm_df <- melt(ssm)
-  colnames(ssm_df) <- c("Time1", "Time2", "Similarity")
-  
-  p <- ggplot(ssm_df, aes(x = Time1, y = Time2, fill = Similarity)) +
+# Function to compute pairwise distances
+compmus_long_distance <- function(xdat, ydat, feature, distance = "euclidean") {
+  feature <- enquo(feature)
+
+  manhattan <- function(x, y) sum(abs(x - y))
+  euclidean <- function(x, y) sqrt(sum((x - y)^2))
+  chebyshev <- function(x, y) max(abs(x - y))
+  pearson <- function(x, y) 1 - cor(x, y)
+  cosine <- function(x, y) { 1 - sum(compmus_normalise(x, "euclidean") * compmus_normalise(y, "euclidean")) }
+  angular <- function(x, y) 2 * acos(1 - cosine(x, y)) / pi
+  aitchison <- function(x, y) { euclidean(compmus_normalise(x, "clr"), compmus_normalise(y, "clr")) }
+
+  METHODS <- list(
+    manhattan = manhattan, cityblock = manhattan, taxicab = manhattan, L1 = manhattan, totvar = manhattan,
+    euclidean = euclidean, L2 = euclidean,
+    chebyshev = chebyshev, maximum = chebyshev,
+    pearson = pearson, correlation = pearson,
+    cosine = cosine,
+    angular = angular,
+    aitchison = aitchison
+  )
+
+  if (!is.na(i <- pmatch(distance, names(METHODS)))) {
+    dplyr::cross_join(
+      xdat %>%
+        rename(xtime = time) %>%
+        tidyr::nest(.by = xtime) %>%
+        transmute(
+          xtime,
+          x = map(data, ~ .x %>% arrange(!!feature) %>% pull(value))
+        ) %>%
+        arrange(xtime) %>%
+        filter(row_number(xtime) %% 10 == 5),
+      ydat %>%
+        rename(ytime = time) %>%
+        tidyr::nest(.by = ytime) %>%
+        transmute(
+          ytime,
+          y = map(data, ~ .x %>% arrange(!!feature) %>% pull(value))
+        ) %>%
+        arrange(ytime) %>%
+        filter(row_number(ytime) %% 10 == 5)
+    ) %>%
+      transmute(
+        xtime,
+        ytime,
+        d = map2_dbl(x, y, METHODS[[i]])
+      )
+  } else {
+    stop("The distance name is ambiguous or unsupported.")
+  }
+}
+
+# Chroma and Timbre Matching Example
+compmus_match_pitch_template <- function(dat, templates, method = "cosine", norm = "euclidean") {
+  compmus_long_distance(
+    dat %>%
+      mutate(pitches = map(pitches, compmus_normalise, norm)),
+    templates %>%
+      transmute(
+        start = name,
+        duration = 1,
+        pitches = map(template, compmus_normalise, norm)
+      ),
+    feature = pitches,
+    method = method
+  ) %>%
+    transmute(
+      start = xstart,
+      duration = xduration,
+      name = factor(ystart, levels = pluck(templates, "name")),
+      d
+    )
+}
+
+# Plot Self-Similarity Matrices
+plot_similarity_matrix <- function(similarity_data, title) {
+  ggplot(similarity_data, aes(x = xtime, y = ytime, fill = d)) +
     geom_tile() +
-    scale_fill_viridis_c() +
-    theme_minimal() +
-    labs(title = title, x = "Time Index", y = "Time Index")
-  
-  ggplotly(p)  # Convert to interactive plot
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = title, x = "Time", y = "Time", fill = "Distance") +
+    theme_minimal()
 }
 
-plot_ssm(ssm_mfcc1, "MFCC-Based Self-Similarity Matrix (Track 1)")
-plot_ssm(ssm_mfcc2, "MFCC-Based Self-Similarity Matrix (Track 2)")
+# Example Execution: Load and Analyze a Track
+file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json" # Update with actual file path
+
+# Compute chroma and timbre
+circshift <- function(vec, shift) {
+  n <- length(vec)
+  shift <- shift %% n  # Ensure the shift is within bounds
+  c(tail(vec, -shift), head(vec, shift))
+}
+
+chroma_data <- compmus_chroma(file_path, norm = "euclidean")
+mfcc_data <- compmus_mfccs(file_path, norm = "euclidean")
+
+# Compute self-similarity matrices
+chroma_similarity <- compmus_self_similarity(chroma_data, feature = pc, distance = "cosine")
+mfcc_similarity <- compmus_self_similarity(mfcc_data, feature = mfcc, distance = "euclidean")
+
+# Plot similarity matrices
+plot_similarity_matrix(chroma_similarity, "Chroma Self-Similarity Matrix")
+plot_similarity_matrix(mfcc_similarity, "Timbre (MFCC) Self-Similarity Matrix")
 
 
 ```
 
+##  {data-width="600"}
 
- {data-width=600}
------------------------------------------------------------------------
+### Other relevant information
 
-### Other relevant information 
-
-Welcome to my **Portofolio** for the Computational Musicology course! The two tracks I have created were made using **flstudio**, about 2 years ago when I was getting started with music production. 
+Welcome to my **Portofolio** for the Computational Musicology course! The two tracks I have created were made using **flstudio**, about 2 years ago when I was getting started with music production.
 
 ```{r}
 
 ```
 
-Visualisation 
-=================
+# Visualisation
 
-Column {data-width=650}
------------------------------------------------------------------------
+## Column {data-width="650"}
 
 ### Chart A
 
 ```{r}
 
-``` 
-Column {data-width=350}
------------------------------------------------------------------------
+```
+
+## Column {data-width="350"}
 
 ### Chart B
 
@@ -149,11 +233,9 @@ Column {data-width=350}
 
 ```
 
-Conclusion 
-=================
+# Conclusion
 
-Column {data-width=650}
------------------------------------------------------------------------
+## Column {data-width="650"}
 
 ### Chart A
 
@@ -161,8 +243,7 @@ Column {data-width=650}
 
 ```
 
-Column {data-width=350}
------------------------------------------------------------------------
+## Column {data-width="350"}
 
 ### Chart B
 
