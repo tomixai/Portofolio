@@ -29,7 +29,9 @@ Welcome to my **Portofolio** for the Computational Musicology class! A little bi
 
 Track 1 was created on FlStudio, around 2 years ago when I was just starting music production. Growing up, the boom bap type of hiphop music was my gateway to other genres, and this track represents my teenage years. I used a sample taken from Splice, pitched it up and chopped it to create the sudden breaks in the vocals. The drum patterns were done in FlStudio. The BPM of the track is 90. 
 
-Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian minimal house genre, which I used to listen to a lot. 
+Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian minimal house genre, which I used to listen to a lot.
+
+**My computer couldn't handle rendering all the chromagrams and SSMs, so I included only  the Chord Analysis. Please scroll to the last 2 sections on the Visualization page.** 
 
 ##  {data-width="600"}
 
@@ -46,361 +48,26 @@ Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian mi
 
 ### Track 1: Chromagram 
 
+
 ```{r}
-# Normalize vectors using various normalization strategies
-compmus_normalise <- function(v, method = "euclidean") {
-  harmonic <- function(v) v * sum(1 / (abs(v) + 1e-8))  # Prevent division by zero
-  manhattan <- function(v) v / (sum(abs(v)) + 1e-8)
-  euclidean <- function(v) v / sqrt(sum(v^2) + 1e-8)
-  chebyshev <- function(v) v / (max(abs(v)) + 1e-8)
-  clr <- function(v) { lv <- log(v + 1e-8); lv - mean(lv) }
-  softmax <- function(v) exp(v) / sum(exp(v))
-  
-  METHODS <- list(
-    identity = identity,
-    harmonic = harmonic,
-    manhattan = manhattan, L1 = manhattan,
-    euclidean = euclidean, L2 = euclidean,
-    chebyshev = chebyshev, maximum = chebyshev,
-    aitchison = clr, clr = clr,
-    softmax = softmax
-  )
 
-  i <- pmatch(method, names(METHODS))
-  if (!is.na(i)) {
-    METHODS[[names(METHODS)[i]]](v)
-  } else {
-    stop("The method name is ambiguous or unsupported.")
-  }
-}
-
-# Function to perform circular shift
-circshift <- function(vec, shift) {
-  n <- length(vec)
-  shift <- shift %% n  # Ensure the shift is within bounds
-  if (shift == 0) return(vec)
-  c(tail(vec, n - shift), head(vec, shift))
-}
-
-# Compute chroma features
-compmus_chroma <- function(file, norm = "identity") {
-  if (!file.exists(file)) stop("File does not exist: ", file)
-  
-  # Corrected way to load JSON data
-  json_data <- fromJSON(readLines(file), flatten = TRUE)
-  
-  # Check if JSON contains the expected structure
-  if (!("tonal" %in% names(json_data)) || !("hpcp" %in% names(json_data$tonal))) {
-    stop("JSON structure is invalid: missing 'tonal$hpcp'")
-  }
-
-  json_data$tonal$hpcp %>%
-    map(~ .x %>%
-           circshift(-8) %>%
-           matrix(nrow = 3, ncol = 12, byrow = TRUE) %>%
-           colMeans() %>%
-           compmus_normalise(method = norm) %>%
-           enframe(name = "pc") %>%
-           mutate(pc = as.numeric(pc) - 1)
-    ) %>%
-    list_rbind(names_to = "time") %>%
-    mutate(time = 2048 * as.numeric(time) / 44100)
-}
-
-# Example Execution: Load and Analyze a Track
-file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json" # Update with actual file path
-
-# Compute chroma data
-chroma_data <- compmus_chroma(file_path, norm = "euclidean")
-
-# Plot chromagram
-ggplot(chroma_data, aes(x = time, y = pc, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient(low = "red", high = "blue") +
-  labs(title = "Chromagram", x = "Time (s)", y = "Pitch Class", fill = "Magnitude") +
-  theme_minimal()
 ```
 
 ### Track 1: Timbre Self-Similarity Matrix
 
 ```{r}
-# Compute MFCCs (Timbre)
-compmus_mfccs <- function(file, norm = "identity") {
-  if (!file.exists(file)) stop("File does not exist: ", file)
-  
-  # Corrected JSON loading
-  json_data <- fromJSON(readLines(file), flatten = TRUE)
-  
-  # Ensure JSON contains expected structure
-  if (!("lowlevel" %in% names(json_data)) || !("mfcc" %in% names(json_data$lowlevel))) {
-    stop("JSON structure is invalid: missing 'lowlevel$mfcc'")
-  }
-
-  json_data$lowlevel$mfcc %>%
-    map(~ .x %>%
-           compmus_normalise(method = norm) %>%
-           enframe(name = "mfcc") %>%
-           mutate(mfcc = as.numeric(mfcc) - 1)
-    ) %>%
-    list_rbind(names_to = "time") %>%
-    mutate(time = 1024 * as.numeric(time) / 44100)
-}
-
-# Compute pairwise distances
-compmus_long_distance <- function(xdat, ydat, feature, distance = "euclidean") {
-  feature <- enquo(feature)
-
-  manhattan <- function(x, y) sum(abs(x - y))
-  euclidean <- function(x, y) sqrt(sum((x - y)^2))
-  chebyshev <- function(x, y) max(abs(x - y))
-  pearson <- function(x, y) 1 - cor(x, y)
-  cosine <- function(x, y) { 1 - sum(compmus_normalise(x, "euclidean") * compmus_normalise(y, "euclidean")) }
-  angular <- function(x, y) 2 * acos(1 - cosine(x, y)) / pi
-  aitchison <- function(x, y) { euclidean(compmus_normalise(x, "clr"), compmus_normalise(y, "clr")) }
-
-  METHODS <- list(
-    manhattan = manhattan, cityblock = manhattan, taxicab = manhattan, L1 = manhattan, totvar = manhattan,
-    euclidean = euclidean, L2 = euclidean,
-    chebyshev = chebyshev, maximum = chebyshev,
-    pearson = pearson, correlation = pearson,
-    cosine = cosine,
-    angular = angular,
-    aitchison = aitchison
-  )
-
-  i <- pmatch(distance, names(METHODS))
-  if (!is.na(i)) {
-    dplyr::cross_join(
-      xdat %>%
-        rename(xtime = time) %>%
-        tidyr::nest(.by = xtime) %>%
-        transmute(
-          xtime,
-          x = map(data, ~ .x %>% arrange(!!feature) %>% pull(value))
-        ) %>%
-        arrange(xtime) %>%
-        filter(row_number(xtime) %% 10 == 5),
-      ydat %>%
-        rename(ytime = time) %>%
-        tidyr::nest(.by = ytime) %>%
-        transmute(
-          ytime,
-          y = map(data, ~ .x %>% arrange(!!feature) %>% pull(value))
-        ) %>%
-        arrange(ytime) %>%
-        filter(row_number(ytime) %% 10 == 5)
-    ) %>%
-      transmute(
-        xtime,
-        ytime,
-        d = map2_dbl(x, y, METHODS[[i]])
-      )
-  } else {
-    stop("The distance name is ambiguous or unsupported.")
-  }
-}
-
-# Compute self-similarity matrices
-compmus_self_similarity <- function(dat, feature, distance = "euclidean") {
-  feature <- enquo(feature)
-  compmus_long_distance(dat, dat, !!feature, distance)
-}
-
-# Example Execution: Load and Analyze a Track
-file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json" # Update with actual file path
-
-# Compute MFCC data
-mfcc_data <- compmus_mfccs(file_path, norm = "euclidean")
-
-# Compute self-similarity matrix
-mfcc_similarity <- compmus_self_similarity(mfcc_data, feature = mfcc, distance = "euclidean")
-
-# Plot similarity matrix
-ggplot(mfcc_similarity, aes(x = xtime, y = ytime, fill = d)) +
-  geom_tile() +
-  scale_fill_gradient(low = "blue", high = "yellow") +
-  labs(title = "Timbre Self-Similarity Matrix", x = "Time", y = "Time", fill = "Distance") +
-  theme_minimal()
 
 ``` 
 
 ### Track 2: Chromagram 
 ```{r}
-# Normalize vectors using various normalization strategies
-compmus_normalise <- function(v, method = "euclidean") {
-  harmonic <- function(v) v * sum(1 / (abs(v) + 1e-8))  # Prevent division by zero
-  manhattan <- function(v) v / (sum(abs(v)) + 1e-8)
-  euclidean <- function(v) v / sqrt(sum(v^2) + 1e-8)
-  chebyshev <- function(v) v / (max(abs(v)) + 1e-8)
-  clr <- function(v) { lv <- log(v + 1e-8); lv - mean(lv) }
-  softmax <- function(v) exp(v) / sum(exp(v))
-  
-  METHODS <- list(
-    identity = identity,
-    harmonic = harmonic,
-    manhattan = manhattan, L1 = manhattan,
-    euclidean = euclidean, L2 = euclidean,
-    chebyshev = chebyshev, maximum = chebyshev,
-    aitchison = clr, clr = clr,
-    softmax = softmax
-  )
 
-  i <- pmatch(method, names(METHODS))
-  if (!is.na(i)) {
-    METHODS[[names(METHODS)[i]]](v)
-  } else {
-    stop("The method name is ambiguous or unsupported.")
-  }
-}
-
-# Function to perform circular shift
-circshift <- function(vec, shift) {
-  n <- length(vec)
-  shift <- shift %% n  # Ensure the shift is within bounds
-  if (shift == 0) return(vec)
-  c(tail(vec, n - shift), head(vec, shift))
-}
-
-# Compute chroma features
-compmus_chroma <- function(file, norm = "identity") {
-  if (!file.exists(file)) stop("File does not exist: ", file)
-
-  # Correct JSON loading
-  json_data <- fromJSON(readLines(file), flatten = TRUE)
-
-  # Ensure JSON structure is valid
-  if (!("tonal" %in% names(json_data)) || !("hpcp" %in% names(json_data$tonal))) {
-    stop("JSON structure is invalid: missing 'tonal$hpcp'")
-  }
-
-  json_data$tonal$hpcp %>%
-    map(~ .x %>%
-           circshift(-8) %>%
-           matrix(nrow = 3, ncol = 12, byrow = TRUE) %>%
-           colMeans() %>%
-           compmus_normalise(method = norm) %>%
-           enframe(name = "pc") %>%
-           mutate(pc = as.numeric(pc) - 1)
-    ) %>%
-    list_rbind(names_to = "time") %>%
-    mutate(time = 2048 * as.numeric(time) / 44100)
-}
-
-# Example Execution: Load and Analyze a Track
-file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-2.json" # Update with actual file path
-
-# Compute chroma data
-chroma_data <- compmus_chroma(file_path, norm = "euclidean")
-
-# Plot chromagram
-ggplot(chroma_data, aes(x = time, y = pc, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient(low = "blue", high = "red") +
-  labs(title = "Chromagram", x = "Time (s)", y = "Pitch Class", fill = "Magnitude") +
-  theme_minimal()
 ``` 
 
 
 ### Track 2: Timbre Self-Similarity Matrix
 
 ```{r} 
-# Compute MFCCs (Timbre)
-compmus_mfccs <- function(file, norm = "identity") {
-  if (!file.exists(file)) stop("File does not exist: ", file)
-  
-  # Correct JSON loading
-  json_data <- fromJSON(readLines(file), flatten = TRUE)
-  
-  # Ensure JSON contains expected structure
-  if (!("lowlevel" %in% names(json_data)) || !("mfcc" %in% names(json_data$lowlevel))) {
-    stop("JSON structure is invalid: missing 'lowlevel$mfcc'")
-  }
-
-  json_data$lowlevel$mfcc %>%
-    map(~ .x %>%
-           compmus_normalise(method = norm) %>%
-           enframe(name = "mfcc") %>%
-           mutate(mfcc = as.numeric(mfcc) - 1)
-    ) %>%
-    list_rbind(names_to = "time") %>%
-    mutate(time = 1024 * as.numeric(time) / 44100)
-}
-
-# Compute pairwise distances
-compmus_long_distance <- function(xdat, ydat, feature, distance = "euclidean") {
-  feature <- enquo(feature)
-
-  manhattan <- function(x, y) sum(abs(x - y))
-  euclidean <- function(x, y) sqrt(sum((x - y)^2))
-  chebyshev <- function(x, y) max(abs(x - y))
-  pearson <- function(x, y) 1 - cor(x, y)
-  cosine <- function(x, y) { 1 - sum(compmus_normalise(x, "euclidean") * compmus_normalise(y, "euclidean")) }
-  angular <- function(x, y) 2 * acos(1 - cosine(x, y)) / pi
-  aitchison <- function(x, y) { euclidean(compmus_normalise(x, "clr"), compmus_normalise(y, "clr")) }
-
-  METHODS <- list(
-    manhattan = manhattan, cityblock = manhattan, taxicab = manhattan, L1 = manhattan, totvar = manhattan,
-    euclidean = euclidean, L2 = euclidean,
-    chebyshev = chebyshev, maximum = chebyshev,
-    pearson = pearson, correlation = pearson,
-    cosine = cosine,
-    angular = angular,
-    aitchison = aitchison
-  )
-
-  i <- pmatch(distance, names(METHODS))
-  if (!is.na(i)) {
-    dplyr::cross_join(
-      xdat %>%
-        rename(xtime = time) %>%
-        tidyr::nest(.by = xtime) %>%
-        transmute(
-          xtime,
-          x = map(data, ~ .x %>% arrange(!!feature) %>% pull(value))
-        ) %>%
-        arrange(xtime) %>%
-        filter(row_number(xtime) %% 10 == 5),
-      ydat %>%
-        rename(ytime = time) %>%
-        tidyr::nest(.by = ytime) %>%
-        transmute(
-          ytime,
-          y = map(data, ~ .x %>% arrange(!!feature) %>% pull(value))
-        ) %>%
-        arrange(ytime) %>%
-        filter(row_number(ytime) %% 10 == 5)
-    ) %>%
-      transmute(
-        xtime,
-        ytime,
-        d = map2_dbl(x, y, METHODS[[names(METHODS)[i]]])
-      )
-  } else {
-    stop("The distance name is ambiguous or unsupported.")
-  }
-}
-
-# Compute self-similarity matrices
-compmus_self_similarity <- function(dat, feature, distance = "euclidean") {
-  feature <- enquo(feature)
-  compmus_long_distance(dat, dat, !!feature, distance)
-}
-
-# Example Execution: Load and Analyze a Track
-file_path <- "/Users/thomas/Desktop/jsonTracks/thomas-m-2.json" # Update with actual file path
-
-# Compute MFCC data
-mfcc_data <- compmus_mfccs(file_path, norm = "euclidean")
-
-# Compute self-similarity matrix
-mfcc_similarity <- compmus_self_similarity(mfcc_data, feature = mfcc, distance = "euclidean")
-
-# Plot similarity matrix
-ggplot(mfcc_similarity, aes(x = xtime, y = ytime, fill = d)) +
-  geom_tile() +
-  scale_fill_gradient(low = "blue", high = "yellow") +
-  labs(title = "Timbre Self-Similarity Matrix", x = "Time", y = "Time", fill = "Distance") +
-  theme_minimal()
 
 ```
 
@@ -420,7 +87,7 @@ compmus_chords <- function(file) {
       chords_progression = paste(key, chords_scale, sep = " ")
     )
   
-  return(chord_data)
+  return(chord_data) 
 }
 
 # ---- Track 1 Analysis ----
@@ -476,7 +143,7 @@ ggplot(chord_data_2, aes(x = time, y = chords_progression, fill = chords_progres
     y = "Chord Progression",
     fill = "Chords"
   ) +
-  theme_minimal()
+  theme_minimal() 
 ```
 
 # Conclusion
