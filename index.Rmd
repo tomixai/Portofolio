@@ -31,23 +31,138 @@ Track 1 was created on FlStudio, around 2 years ago when I was just starting mus
 
 Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian minimal house genre, which I used to listen to a lot.
 
-**My computer couldn't handle rendering all the chromagrams and SSMs, so I included only  the Chord Analysis. Please scroll to the last 2 sections on the Visualization page.** 
+**My computer couldn't handle rendering all the chromagrams and SSMs, so I included only  HW 11.** 
 
 ##  {data-width="600"}
 
 ### Other relevant information
 
-
+Global Functions 
 ```{r}
+# Function to normalize vectors
+compmus_normalise <- function(v, method = "euclidean") {
+  METHODS <- list(
+    identity = identity,
+    harmonic = function(v) v * sum(1 / abs(v)),
+    manhattan = function(v) v / sum(abs(v)),
+    euclidean = function(v) v / sqrt(sum(v^2)),
+    chebyshev = function(v) v / max(abs(v)),
+    clr = function(v) { lv <- log(v); lv - mean(lv) },
+    softmax = function(v) exp(v) / sum(exp(v))
+  )
+  
+  if (method %in% names(METHODS)) {
+    return(METHODS[[method]](v))
+  } else {
+    stop("The method name is ambiguous or unsupported.")
+  }
+}
 
+# Function to compute chroma features
+compmus_chroma <- function(file, norm = "identity") {
+  json_text <- paste(readLines(file, warn = FALSE), collapse = "")
+  json_data <- fromJSON(txt = json_text)
+
+  if (is.null(json_data$tonal$hpcp) || length(json_data$tonal$hpcp) == 0) {
+    stop("Error: No valid chroma data found in JSON file!")
+  }
+  
+  chroma_matrix <- json_data$tonal$hpcp  # Extract raw chroma data
+
+  # Ensure chroma_matrix is a valid list of vectors
+  if (is.list(chroma_matrix) && all(sapply(chroma_matrix, is.numeric))) {
+    chroma_matrix <- do.call(rbind, chroma_matrix)  # Convert list of vectors to matrix
+  } else {
+    stop("Error: Chroma data format is incorrect!")
+  }
+  
+  # Ensure we have the expected number of pitch classes (12)
+  if (ncol(chroma_matrix) != 12) {
+    stop("Error: Chroma matrix does not have 12 pitch classes!")
+  }
+
+  # Normalize and format data
+  chroma_data <- as_tibble(chroma_matrix) %>%
+    mutate(time = seq(0, by = (2048 / 44100), length.out = nrow(chroma_matrix))) %>%
+    pivot_longer(cols = starts_with("V"), names_to = "pc", values_to = "value") %>%
+    mutate(pc = as.integer(gsub("V", "", pc)) - 1)  # Convert column names to pitch class numbers
+  
+  return(chroma_data)
+}
+
+# Function to compute Chordograms & Keygrams
+compmus_extract <- function(file, feature) {
+  json_text <- paste(readLines(file, warn = FALSE), collapse = "")
+  json_data <- fromJSON(txt = json_text)
+  
+  if (feature == "chords") {
+    key_names <- unlist(json_data$tonal$chords_key, use.names = FALSE)
+    key_confidence <- unlist(json_data$tonal$chords_strength, use.names = FALSE)
+  } else if (feature == "key") {
+    key_names <- unlist(json_data$tonal$key_krumhansl$key, use.names = FALSE)
+    key_confidence <- unlist(json_data$tonal$key_krumhansl$strength, use.names = FALSE)
+  } else {
+    stop("Invalid feature type. Choose 'chords' or 'key'.")
+  }
+  
+  num_keys <- length(key_names)
+  time_values <- seq(0, json_data$metadata$audio_properties$length, length.out = num_keys)
+  
+  return(tibble(Time = time_values, Feature = key_names, Intensity = key_confidence))
+}
+
+# Define file paths for both tracks
+file_path_1 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json"
+file_path_2 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-2.json"
+``` 
+
+### HW 11: Histogram of Tempi
+```{r}
+corpus_files <- list.files("/Users/thomas/Desktop/jsonTracks/", full.names = TRUE, pattern = "*.json")
+corpus_tempi <- map_dbl(corpus_files, function(file) {
+  json_text <- paste(readLines(file, warn = FALSE), collapse = "")
+  json_data <- fromJSON(txt = json_text)
+  if (!is.null(json_data$rhythm$bpm)) {
+    return(json_data$rhythm$bpm)
+  } else {
+    return(NA)  
+  }
+})
+
+corpus_tempi <- corpus_tempi[!is.na(corpus_tempi)]
+
+ggplot(tibble(BPM = corpus_tempi), aes(x = BPM)) +
+  geom_histogram(binwidth = 5, fill = "blue", color = "white", alpha = 0.7) +
+  labs(title = "Histogram of Tempi in the Class Corpus", x = "BPM", y = "Frequency") +
+  theme_minimal()
 ```
+
+### Tempograms for track 1
+```{r}
+tempogram_data_1 <- compmus_extract(file_path_1, "key")
+
+ggplot(tempogram_data_1, aes(x = Time, y = Intensity)) +
+  geom_line(color = "blue") +
+  labs(title = "Tempogram - Track 1", x = "Time (s)", y = "BPM Confidence") +
+  theme_minimal()
+``` 
+
+### Tempograms for track 2
+```{r}
+tempogram_data_2 <- compmus_extract(file_path_2, "key")
+
+ggplot(tempogram_data_2, aes(x = Time, y = Intensity)) +
+  geom_line(color = "blue") +
+  labs(title = "Tempogram - Track 2", x = "Time (s)", y = "BPM Confidence") +
+  theme_minimal()
+``` 
+
 
 # Visualisation {.storyboard}
 
 ##  {data-width="400"}
 
 ### Track 1: Chromagram 
-
 
 ```{r}
 
@@ -64,87 +179,38 @@ Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian mi
 
 ``` 
 
-
 ### Track 2: Timbre Self-Similarity Matrix
 
 ```{r} 
 
 ```
 
-### Track 1: Analysis of chords 
+### Track 1: Chordogram 
 
 ```{r}
-# Function to compute chord analysis from JSON files
-compmus_chords <- function(file) {
-  json_data <- fromJSON("/Users/thomas/Desktop/jsonTracks/thomas-m-1.json")
-  
-  # Extract harmonic pitch class profile (HPCP) data
-  chord_data <- json_data$tonal$chords_key %>%
-    enframe(name = "time", value = "key") %>%
-    mutate(
-      time = 2048 * (time - 1) / 44100,  # Convert frame index to seconds
-      chords_scale = json_data$tonal$chords_scale[time + 1],
-      chords_progression = paste(key, chords_scale, sep = " ")
-    )
-  
-  return(chord_data) 
-}
 
-# ---- Track 1 Analysis ----
-
-# Load and Analyze Chords from Track 1
-file_path_1 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json" # Update with actual file path
-chord_data_1 <- compmus_chords(file_path_1)
-
-# Plot chord progression for Track 1
-ggplot(chord_data_1, aes(x = time, y = chords_progression, fill = chords_progression)) +
-  geom_tile() +
-  scale_fill_brewer(palette = "Set3") +
-  labs(
-    title = "Chord Analysis - Track 1",
-    x = "Time (s)",
-    y = "Chord Progression",
-    fill = "Chords"
-  ) +
-  theme_minimal()
 ```
 
-### Track 2: Analysis of chords 
+### Track 2: Chordogram
 
 ```{r}
-# Function to compute chord analysis from JSON files
-compmus_chords <- function(file) {
-  json_data <- fromJSON("/Users/thomas/Desktop/jsonTracks/thomas-m-2.json")
-  
-  # Extract harmonic pitch class profile (HPCP) data
-  chord_data <- json_data$tonal$chords_key %>%
-    enframe(name = "time", value = "key") %>%
-    mutate(
-      time = 2048 * (time - 1) / 44100,  # Convert frame index to seconds
-      chords_scale = json_data$tonal$chords_scale[time + 1],
-      chords_progression = paste(key, chords_scale, sep = " ")
-    )
-  
-  return(chord_data) 
-}
-# ---- Track 2 Analysis ----
 
-# Load and Analyze Chords from Track 2
-file_path_2 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-2.json" # Update with actual file path
-chord_data_2 <- compmus_chords(file_path_2)
-
-# Plot chord progression for Track 2
-ggplot(chord_data_2, aes(x = time, y = chords_progression, fill = chords_progression)) +
-  geom_tile() +
-  scale_fill_brewer(palette = "Set3") +
-  labs(
-    title = "Chord Analysis - Track 2",
-    x = "Time (s)",
-    y = "Chord Progression",
-    fill = "Chords"
-  ) +
-  theme_minimal() 
 ```
+
+### Histogram of Tempi
+```{r}
+
+```
+
+### Tempograms for track 1
+```{r}
+
+``` 
+
+### Tempograms for track 2
+```{r}
+
+``` 
 
 # Conclusion
 
