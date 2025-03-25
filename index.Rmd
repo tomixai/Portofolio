@@ -17,6 +17,8 @@ library(ggplot2)
 library(dplyr)
 library(purrr)
 library(jsonlite) 
+library(tibble)
+library(stringr)
 ```
 
 # Introduction {.storyboard}
@@ -29,9 +31,9 @@ Welcome to my **Portofolio** for the Computational Musicology class! A little bi
 
 Track 1 was created on FlStudio, around 2 years ago when I was just starting music production. Growing up, the boom bap type of hiphop music was my gateway to other genres, and this track represents my teenage years. I used a sample taken from Splice, pitched it up and chopped it to create the sudden breaks in the vocals. The drum patterns were done in FlStudio. The BPM of the track is 90. 
 
-Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian minimal house genre, which I used to listen to a lot.
+Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian minimal house genre, which I used to listen to a lot growing up. 
 
-**My computer couldn't handle rendering all the chromagrams and SSMs, so I included only  HW 11.** 
+I hope you'll enjoy this computational journey! 
 
 ##  {data-width="600"}
 
@@ -116,48 +118,6 @@ file_path_1 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json"
 file_path_2 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-2.json"
 ``` 
 
-### HW 11: Histogram of Tempi
-```{r}
-corpus_files <- list.files("/Users/thomas/Desktop/jsonTracks/", full.names = TRUE, pattern = "*.json")
-corpus_tempi <- map_dbl(corpus_files, function(file) {
-  json_text <- paste(readLines(file, warn = FALSE), collapse = "")
-  json_data <- fromJSON(txt = json_text)
-  if (!is.null(json_data$rhythm$bpm)) {
-    return(json_data$rhythm$bpm)
-  } else {
-    return(NA)  
-  }
-})
-
-corpus_tempi <- corpus_tempi[!is.na(corpus_tempi)]
-
-ggplot(tibble(BPM = corpus_tempi), aes(x = BPM)) +
-  geom_histogram(binwidth = 5, fill = "blue", color = "white", alpha = 0.7) +
-  labs(title = "Histogram of Tempi in the Class Corpus", x = "BPM", y = "Frequency") +
-  theme_minimal()
-```
-
-### Tempograms for track 1
-```{r}
-tempogram_data_1 <- compmus_extract(file_path_1, "key")
-
-ggplot(tempogram_data_1, aes(x = Time, y = Intensity)) +
-  geom_line(color = "blue") +
-  labs(title = "Tempogram - Track 1", x = "Time (s)", y = "BPM Confidence") +
-  theme_minimal()
-``` 
-
-### Tempograms for track 2
-```{r}
-tempogram_data_2 <- compmus_extract(file_path_2, "key")
-
-ggplot(tempogram_data_2, aes(x = Time, y = Intensity)) +
-  geom_line(color = "blue") +
-  labs(title = "Tempogram - Track 2", x = "Time (s)", y = "BPM Confidence") +
-  theme_minimal()
-``` 
-
-
 # Visualisation {.storyboard}
 
 ##  {data-width="400"}
@@ -165,52 +125,193 @@ ggplot(tempogram_data_2, aes(x = Time, y = Intensity)) +
 ### Track 1: Chromagram 
 
 ```{r}
+# === Function: Compute chromagram from HPCP ===
+compmus_chroma <- function(file, norm = "euclidean") {
+  # Read file
+  json_text <- paste(readLines(file, warn = FALSE), collapse = "")
+  json_data <- fromJSON(txt = json_text)
 
+  # Extract HPCP matrix
+  hpcp <- json_data$tonal$hpcp
+
+  # Convert to tibble with time and pitch class (pc)
+  chroma_data <- hpcp %>%
+    map_dfr(~ enframe(.x, name = "pc", value = "value"), .id = "frame") %>%
+    mutate(
+      pc = as.numeric(pc) - 1,
+      frame = as.numeric(frame),
+      time = frame * (2048 / 44100)
+    )
+
+  return(chroma_data)
+}
+
+# === Set filepath ===
+file_path_1 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json"
+
+# === Run ===
+chroma_data_1 <- compmus_chroma(file_path_1)
+
+# === Plot ===
+ggplot(chroma_data_1, aes(x = time, y = pc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkred", high = "lightblue") +
+  labs(
+    title = "Chromagram – Track 1",
+    x = "Time (s)", y = "Pitch Class", fill = "Magnitude"
+  ) +
+  theme_minimal()
 ```
 
-### Track 1: Timbre Self-Similarity Matrix
+### Track 1: MFCC-Based Cepstrogram
 
 ```{r}
+# --- MFCC Extraction ---
+compmus_mfccs <- function(file, norm = "identity") {
+  json_text <- paste(readLines(file, warn = FALSE), collapse = "")
+  json_data <- fromJSON(txt = json_text)
+
+  mfcc_matrix <- json_data$lowlevel$mfcc
+
+  mfcc_data <- mfcc_matrix %>%
+    map(~ compmus_normalise(.x, method = norm)) %>%
+    map_dfr(~ enframe(.x, name = "mfcc", value = "value"), .id = "time") %>%
+    mutate(
+      time = as.numeric(time) * (1024 / 44100),
+      mfcc = as.numeric(mfcc) - 1
+    )
+
+  return(mfcc_data)
+}
+
+# --- Apply to Track 1 ---
+mfcc_data_1 <- compmus_mfccs("/Users/thomas/Desktop/jsonTracks/thomas-m-1.json", norm = "euclidean")
+
+# --- Plot Cepstrogram ---
+ggplot(mfcc_data_1, aes(x = time, y = mfcc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "gold") +
+  labs(title = "Cepstrogram (MFCCs) – Track 1", x = "Time (s)", y = "MFCC", fill = "Value") +
+  theme_minimal()
 
 ``` 
 
 ### Track 2: Chromagram 
 ```{r}
+# Reuse chroma function from earlier
+chroma_data_2 <- compmus_chroma(file_path_2)
+
+# Plot chromagram
+ggplot(chroma_data_2, aes(x = time, y = pc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkred", high = "lightblue") +
+  labs(
+    title = "Chromagram – Track 2",
+    x = "Time (s)", y = "Pitch Class", fill = "Magnitude"
+  ) +
+  theme_minimal()
 
 ``` 
 
-### Track 2: Timbre Self-Similarity Matrix
+### Track 2: MFCC-Based Cepstrogram
+```{r}
+# Extract MFCCs
+mfcc_data_2 <- compmus_mfccs(file_path_2, norm = "euclidean")
 
-```{r} 
+# Plot
+ggplot(mfcc_data_2, aes(x = time, y = mfcc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "gold") +
+  labs(
+    title = "Cepstrogram (MFCCs) – Track 2",
+    x = "Time (s)", y = "MFCC", fill = "Value"
+  ) +
+  theme_minimal()
 
 ```
 
 ### Track 1: Chordogram 
 
 ```{r}
+# Extract chord data for Track 1
+chords_1 <- compmus_extract(file_path_1, feature = "chords")
+
+# Plot chordogram
+ggplot(chords_1, aes(x = Time, y = Feature, fill = Intensity)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkred", high = "lightblue") +
+  labs(
+    title = "Chordogram – Track 1",
+    x = "Time (s)",
+    y = "Chord",
+    fill = "Confidence"
+  ) +
+  theme_minimal()
 
 ```
 
 ### Track 2: Chordogram
 
 ```{r}
+# Extract chord data for Track 2
+chords_2 <- compmus_extract(file_path_2, feature = "chords")
+
+# Plot chordogram
+ggplot(chords_2, aes(x = Time, y = Feature, fill = Intensity)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkred", high = "lightblue") +
+  labs(
+    title = "Chordogram – Track 2",
+    x = "Time (s)",
+    y = "Chord",
+    fill = "Confidence"
+  ) +
+  theme_minimal()
 
 ```
 
-### Histogram of Tempi
+
+### Track 1: Keygram 
 ```{r}
+# Extract key data for Track 1
+keys_1 <- compmus_extract(file_path_1, feature = "key")
+
+# Plot keygram
+ggplot(keys_1, aes(x = Time, y = Feature, fill = Intensity)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkblue", high = "gold") +
+  labs(
+    title = "Keygram – Track 1",
+    x = "Time (s)",
+    y = "Key",
+    fill = "Confidence"
+  ) +
+  theme_minimal()
 
 ```
 
-### Tempograms for track 1
+### Track 2: Keygram 
 ```{r}
+# Extract key data for Track 2
+keys_2 <- compmus_extract(file_path_2, feature = "key")
 
-``` 
+# Plot keygram
+ggplot(keys_2, aes(x = Time, y = Feature, fill = Intensity)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkblue", high = "gold") +
+  labs(
+    title = "Keygram – Track 2",
+    x = "Time (s)",
+    y = "Key",
+    fill = "Confidence"
+  ) +
+  theme_minimal()
 
-### Tempograms for track 2
-```{r}
+```
 
-``` 
+### Tempogram for my 2 tracks
+
+No tempo (BPM) data was available in the JSON output for either of my tracks. Therefore, tempogram analysis could not be performed.
 
 # Conclusion
 
