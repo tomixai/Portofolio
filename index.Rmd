@@ -1,5 +1,5 @@
 ---
-title: "Portofolio for Computational Musicology 2025"
+title: "Portfolio for Computational Musicology 2025"
 author: "Thomas Manu"
 date: "`r Sys.Date()`"
 output: 
@@ -21,25 +21,34 @@ library(tibble)
 library(stringr)
 ```
 
-# Introduction {.storyboard}
+# Introduction 
 
-##  {data-width="400"}
+##
 
 ### Welcome!
 
-Welcome to my **Portofolio** for the Computational Musicology class! A little bit of a backstory on how I created the tracks. 
+Welcome to my **Portfolio** for the Computational Musicology class! A little bit of a backstory on how I created the tracks. 
 
 Track 1 was created on FlStudio, around 2 years ago when I was just starting music production. Growing up, the boom bap type of hiphop music was my gateway to other genres, and this track represents my teenage years. I used a sample taken from Splice, pitched it up and chopped it to create the sudden breaks in the vocals. The drum patterns were done in FlStudio. The BPM of the track is 90. 
 
 Track 2 was also done in FlStudio. This 130 BPM track represents the Romanian minimal house genre, which I used to listen to a lot growing up. 
 
-I hope you'll enjoy this computational journey! 
+I hope you'll enjoy this computational journey! Below are my 2 tracks, have a listen before scrolling through all the plots. 
 
-##  {data-width="600"}
+### Track 1
 
-### Other relevant information
+<audio controls>
+  <source src="music/Thomas-M-1.mp3" type="audio/mpeg">
+  Your browser does not support the audio element.
+</audio>
 
-Global Functions 
+### Track 2
+
+<audio controls>
+  <source src="music/Thomas-M-2.mp3" type="audio/mpeg">
+  Your browser does not support the audio element.
+</audio> 
+
 ```{r}
 # Function to normalize vectors
 compmus_normalise <- function(v, method = "euclidean") {
@@ -118,11 +127,9 @@ file_path_1 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-1.json"
 file_path_2 <- "/Users/thomas/Desktop/jsonTracks/thomas-m-2.json"
 ``` 
 
-# Visualisation {.storyboard}
+# Visualisation: Track 1 {.storyboard}
 
-##  {data-width="400"}
-
-### Track 1: Chromagram 
+### Chromagram 
 
 ```{r}
 # === Function: Compute chromagram from HPCP ===
@@ -163,7 +170,12 @@ ggplot(chroma_data_1, aes(x = time, y = pc, fill = value)) +
   theme_minimal()
 ```
 
-### Track 1: MFCC-Based Cepstrogram
+*** 
+
+The chromagram for this boom bap instrumental shows dense vertical striping with very little horizontal continuity, a visual cue that instantly reminded me how rhythm-forward this track really is. That makes sense, since when I made it, my focus was all on the drum pattern: layering the kicks, snares, and hi-hats to create a gritty, driving texture. There’s not much harmonic content cutting through, and that’s intentional. The chroma magnitudes are pretty uniform across pitch classes, likely because the melodic loop I used was either heavily filtered or just got buried under the drums in the mix. I wasn’t trying to foreground harmony, the beat itself was the centerpiece. Seeing that reflected so clearly in the chromagram made me appreciate how the genre’s aesthetic decisions show up in the data.
+
+
+### MFCC-Based Cepstrogram
 
 ```{r}
 # --- MFCC Extraction ---
@@ -196,41 +208,10 @@ ggplot(mfcc_data_1, aes(x = time, y = mfcc, fill = value)) +
 
 ``` 
 
-### Track 2: Chromagram 
-```{r}
-# Reuse chroma function from earlier
-chroma_data_2 <- compmus_chroma(file_path_2)
+*** 
+The MFCC cepstrogram of my boom bap track shows a really active and percussive timbral landscape. There are no long, smooth horizontal patterns, which makes sense given how focused the track is on short, punchy sounds. When I put it together, I was working with tightly quantized drum hits, especially the kick and snare, and those create constant spectral shifts over time. The vertical variation throughout the plot reflects the loop-based structure I used, with each repetition carrying a slightly different texture because of how I layered the drums and manipulated the samples. A lot of the material was chopped pretty aggressively, so even though the loop repeats, there is still contrast from frame to frame. That variation helps keep the track engaging even within a minimal harmonic framework. 
 
-# Plot chromagram
-ggplot(chroma_data_2, aes(x = time, y = pc, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient(low = "darkred", high = "lightblue") +
-  labs(
-    title = "Chromagram – Track 2",
-    x = "Time (s)", y = "Pitch Class", fill = "Magnitude"
-  ) +
-  theme_minimal()
-
-``` 
-
-### Track 2: MFCC-Based Cepstrogram
-```{r}
-# Extract MFCCs
-mfcc_data_2 <- compmus_mfccs(file_path_2, norm = "euclidean")
-
-# Plot
-ggplot(mfcc_data_2, aes(x = time, y = mfcc, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient(low = "blue", high = "gold") +
-  labs(
-    title = "Cepstrogram (MFCCs) – Track 2",
-    x = "Time (s)", y = "MFCC", fill = "Value"
-  ) +
-  theme_minimal()
-
-```
-
-### Track 1: Chordogram 
+### Chordogram 
 
 ```{r}
 # Extract chord data for Track 1
@@ -250,28 +231,10 @@ ggplot(chords_1, aes(x = Time, y = Feature, fill = Intensity)) +
 
 ```
 
-### Track 2: Chordogram
+***
+The chordogram for this boom bap track comes back almost empty, showing just a single chord label with no real progression over time. Its confidence level is too low to be meaningful, which honestly did not surprise me. When I made the track, I was not aiming for harmonic clarity. The focus was on texture and rhythm, not on chord progressions. I used a chopped loop that was already somewhat ambiguous, and by the time I filtered and layered it, any tonal cues were pretty much buried. This kind of result highlights how boom bap production tends to challenge standard chord recognition tools. These models are usually trained on harmonically rich music, and they struggle when applied to something so percussive and sample-based. What this plot shows is not a failure of analysis, but a reminder that harmonic structure just was not central to this track. 
 
-```{r}
-# Extract chord data for Track 2
-chords_2 <- compmus_extract(file_path_2, feature = "chords")
-
-# Plot chordogram
-ggplot(chords_2, aes(x = Time, y = Feature, fill = Intensity)) +
-  geom_tile() +
-  scale_fill_gradient(low = "darkred", high = "lightblue") +
-  labs(
-    title = "Chordogram – Track 2",
-    x = "Time (s)",
-    y = "Chord",
-    fill = "Confidence"
-  ) +
-  theme_minimal()
-
-```
-
-
-### Track 1: Keygram 
+### Keygram 
 ```{r}
 # Extract key data for Track 1
 keys_1 <- compmus_extract(file_path_1, feature = "key")
@@ -290,7 +253,91 @@ ggplot(keys_1, aes(x = Time, y = Feature, fill = Intensity)) +
 
 ```
 
-### Track 2: Keygram 
+***
+The keygram for this boom bap track returns a single key classification — B major — with fairly high confidence, around 0.80. But knowing how I built the track, I find that result a bit misleading. I was working with a short loop that had some residual tonal content, but I filtered it pretty heavily and layered it under drums that carry most of the track’s energy. There was no intention to create a clear tonal center, let alone maintain one throughout. So while the model confidently picks out a key, that confidence probably comes more from statistical patterns in the pitch distribution than from any real harmonic structure.
+
+This lines up with what I saw in the chromagram and chordogram. Neither showed strong pitch class clarity or any meaningful chord changes. That makes it unlikely that the B major reading is musically significant. It is more of a side effect of a static loop sitting in the mix. This kind of output highlights the gap between what key estimation models are designed to detect and what actually exists in a production style like boom bap, where harmony is often incidental rather than structural.
+
+
+### Tempogram for my 2 tracks
+
+No tempo (BPM) data was available in the JSON output for either of my tracks. Therefore, tempogram analysis could not be performed.
+
+# Visualization: Track 2 {.storyboard}
+
+### Chromagram 
+
+```{r}
+# Reuse chroma function from earlier
+chroma_data_2 <- compmus_chroma(file_path_2)
+
+# Plot chromagram
+ggplot(chroma_data_2, aes(x = time, y = pc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkred", high = "lightblue") +
+  labs(
+    title = "Chromagram – Track 2",
+    x = "Time (s)", y = "Pitch Class", fill = "Magnitude"
+  ) +
+  theme_minimal()
+
+``` 
+
+***
+The chromagram for my minimal house track shows a long stretch with barely any tonal activity, which matches exactly what I was going for when I built the track. I wanted the early part to stay rhythm-focused and sparse, letting the groove settle in without giving away too much harmonically. That changes in the last quarter, where you see a sudden spike in pitch class activity. That’s when I introduced a more harmonically rich element. I think it was a filtered synth line that I slowly brought up in the mix to shift the energy without disrupting the minimal vibe.
+
+That contrast between the long percussive section and the more tonal ending reflects how I approached the structure. Minimal house is all about subtle pacing, and I leaned into that by holding back harmonic content until the right moment. The sharp chroma definition at the end shows how concentrated that tonal layer was. It wasn’t about complex progressions, but about creating impact through restraint and delayed release. Seeing it laid out like this confirms how much of the track’s mood comes from that slow, intentional build.
+
+### MFCC-Based Cepstrogram
+```{r}
+# Extract MFCCs
+mfcc_data_2 <- compmus_mfccs(file_path_2, norm = "euclidean")
+
+# Plot
+ggplot(mfcc_data_2, aes(x = time, y = mfcc, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "gold") +
+  labs(
+    title = "Cepstrogram (MFCCs) – Track 2",
+    x = "Time (s)", y = "MFCC", fill = "Value"
+  ) +
+  theme_minimal()
+
+```
+
+*** 
+The MFCC cepstrogram for Track 2 captures the kind of timbral progression I was aiming for when producing this minimal house track. Early on, the MFCC values stay pretty stable, which makes sense given the static groove I set up, which was mostly a steady drum pattern and not much going on harmonically. I wanted to build a consistent base that listeners could settle into before introducing any changes.
+
+As the track moves forward, the cepstrogram starts showing more variation, which lines up with the way I slowly layered new elements. I brought in subtle textures like filtered synths, shifting percussion, and gradual EQ tweaks to keep things evolving without breaking the minimal feel. The changes are not abrupt, they’re more like a slow unfolding. That is something I really enjoy about the genre: the ability to build energy through tiny, carefully placed adjustments.
+
+Later in the track, you can see the MFCC variability increase, which reflects that gradual tension-and-release I was building toward. It is a kind of motion that relies more on shaping the texture over time than introducing entirely new material. This pattern shows that my approach was less about contrast and more about shaping the sound space in a way that feels continuous and immersive.
+
+### Chordogram
+
+```{r}
+# Extract chord data for Track 2
+chords_2 <- compmus_extract(file_path_2, feature = "chords")
+
+# Plot chordogram
+ggplot(chords_2, aes(x = Time, y = Feature, fill = Intensity)) +
+  geom_tile() +
+  scale_fill_gradient(low = "darkred", high = "lightblue") +
+  labs(
+    title = "Chordogram – Track 2",
+    x = "Time (s)",
+    y = "Chord",
+    fill = "Confidence"
+  ) +
+  theme_minimal()
+
+```
+***
+
+The chordogram for Track 2, my minimal house piece, shows a single chord label, F#, held across the entire track with low confidence. That result actually lines up with what I intended during production. I kept the harmonic elements minimal and loop-based, using filtered textures that were more about atmosphere than tonal clarity. The model probably latched onto a pad or a chord stab that sits around F#, but the overall harmonic content was sparse and deliberately ambiguous.
+
+I was not trying to create a sense of harmonic movement; the focus was on groove, texture, and pacing. So the lack of segmentation and the low confidence in the chord detection make sense to me. It reflects the fact that harmonic progression was not a structural priority. Instead, I relied on subtle shifts in rhythm, filtering, and layering to shape the flow. From an analytical perspective, this flat chordogram feels like an accurate summary of the track’s design. If anything, it confirms that for this kind of music, deeper insights are more likely to come from exploring its timbral or spatial evolution rather than its harmony.
+
+### Keygram 
 ```{r}
 # Extract key data for Track 2
 keys_2 <- compmus_extract(file_path_2, feature = "key")
@@ -309,30 +356,27 @@ ggplot(keys_2, aes(x = Time, y = Feature, fill = Intensity)) +
 
 ```
 
+***
+The keygram for Track 2 assigns a weak key of B with low confidence, around 0.38, which honestly fits with how I built the track. I wasn’t aiming for a strong tonal center: most of the harmonic content is subtle, filtered, and texturally embedded rather than clearly defined. Minimal house tends to avoid functional harmony, and I leaned into that by working with static loops and tonal fragments that sit more in the background than upfront.
+
+The model probably picked up on a few pitch classes that stand out later in the track, but I doubt there was enough structure to justify a confident key label. What the keygram shows is that tonality just wasn’t a priority in the track’s design. The musical interest comes more from layering, pacing, and texture than from harmonic development. So while the key detection tool tries to find something global, it ends up highlighting how this kind of music resists that kind of analysis. For a track like this, it makes more sense to focus on rhythm, timbre, and spatial movement, that’s where the real structure lives. 
+
+
 ### Tempogram for my 2 tracks
 
-No tempo (BPM) data was available in the JSON output for either of my tracks. Therefore, tempogram analysis could not be performed.
+No tempo (BPM) data was available in the JSON output for either of my tracks. Therefore, tempogram analysis could not be performed. 
 
-# Conclusion
+# Conclusion 
 
-## Column {data-width="650"}
+Looking back at this portfolio, what stands out to me the most is how it brought together two seemingly distant worlds I care deeply about: the creative spontaneity of making music, and the structured, analytical lens of computational analysis. When I first opened FLStudio a few years ago, I was chasing a sound, a mood, something that felt like it belonged to me. I wasn’t thinking about chroma features, tempograms, or self-similarity matrices. I was just experimenting, cutting up samples, layering kicks and snares, trying to make something that felt alive. 
 
-### Chart A
+This project gave me the chance to revisit those early productions with fresh ears, equipped now with tools that let me ask new kinds of questions. What makes a track feel consistent or disjointed? How does rhythm develop over time? Can I visualize the intuition I had back then? The process of breaking down my own work into analyzable components wasn’t just technical, it was personal. It made me reflect on the musical decisions I made without fully realizing their patterns or implications.
 
-```{r}
+More than anything, this portfolio taught me that data and emotion can coexist in music analysis. Computational tools don’t replace the expressive or the intuitive, they uncover hidden layers of meaning that can deepen our understanding. I started this course expecting to analyze music in the abstract, but I leave it having dissected something of my own, and in doing so, I’ve come to appreciate both the math and the magic behind sound.
 
-```
+Thank you for taking the time to explore this with me.
 
-## Column {data-width="350"}
+<div style="text-align:center; margin-top: 20px;">
+  <img src="images/thank-you.png" width="400">
+</div>
 
-### Chart B
-
-```{r}
-
-```
-
-### Chart C
-
-```{r}
-
-```
