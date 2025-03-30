@@ -328,8 +328,8 @@ ggplot(chords_2, aes(x = Time, y = Feature, fill = Intensity)) +
   theme_minimal()
 
 ```
-***
 
+***
 The chordogram for Track 2, my minimal house piece, shows a single chord label, F#, held across the entire track with low confidence. That result actually lines up with what I intended during production. I kept the harmonic elements minimal and loop-based, using filtered textures that were more about atmosphere than tonal clarity. The model probably latched onto a pad or a chord stab that sits around F#, but the overall harmonic content was sparse and deliberately ambiguous.
 
 I was not trying to create a sense of harmonic movement; the focus was on groove, texture, and pacing. So the lack of segmentation and the low confidence in the chord detection make sense to me. It reflects the fact that harmonic progression was not a structural priority. Instead, I relied on subtle shifts in rhythm, filtering, and layering to shape the flow. From an analytical perspective, this flat chordogram feels like an accurate summary of the track’s design. If anything, it confirms that for this kind of music, deeper insights are more likely to come from exploring its timbral or spatial evolution rather than its harmony.
